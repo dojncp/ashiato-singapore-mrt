@@ -1,0 +1,440 @@
+:root {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #172033;
+  background: #eef2f6;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button {
+  min-height: 38px;
+  border: 0;
+  background: #172033;
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+button.secondary {
+  background: #ffffff;
+  color: #172033;
+  border: 1px solid #ccd5df;
+}
+
+input,
+select {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid #ccd5df;
+  background: #fff;
+  padding: 0 10px;
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+  width: auto;
+  min-height: auto;
+}
+
+.shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 340px 1fr;
+}
+
+.sidebar {
+  background: #ffffff;
+  border-right: 1px solid #d9e1ea;
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.brand {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.brand h1 {
+  font-size: 20px;
+  margin: 0;
+  letter-spacing: 0;
+}
+
+.brand p,
+.topbar p {
+  margin: 4px 0 0;
+  color: #667085;
+  font-size: 13px;
+}
+
+.panel {
+  border: 1px solid #d9e1ea;
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+  background: #fbfcfe;
+}
+
+.panel-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+}
+
+.style-editor {
+  display: grid;
+  gap: 10px;
+  padding: 10px 0;
+  border-top: 1px solid #e4eaf1;
+}
+
+.style-editor label {
+  display: grid;
+  gap: 6px;
+  color: #475467;
+  font-size: 13px;
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.nav-panel {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.nav-panel button,
+.admin-tabs button {
+  background: #ffffff;
+  color: #172033;
+  border: 1px solid #ccd5df;
+}
+
+.nav-panel button.active,
+.admin-tabs button.active {
+  background: #172033;
+  color: #ffffff;
+  border-color: #172033;
+}
+
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.metrics div {
+  background: #172033;
+  color: #fff;
+  padding: 12px;
+}
+
+.metrics span {
+  display: block;
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.metrics small {
+  color: #b8c2cf;
+}
+
+.workspace {
+  min-width: 0;
+  padding: 24px;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 18px;
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: flex-start;
+}
+
+.topbar h2 {
+  margin: 0;
+  font-size: 24px;
+  letter-spacing: 0;
+}
+
+.legend {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #fff;
+  border: 1px solid #d9e1ea;
+  padding: 7px 10px;
+  font-size: 13px;
+}
+
+.legend i {
+  width: 18px;
+  height: 4px;
+}
+
+.diagram-panel {
+  min-height: 0;
+  border: 1px solid #d9e1ea;
+  background: #f8fafc;
+  display: grid;
+  grid-template-rows: auto 1fr;
+}
+
+.diagram-toolbar {
+  min-width: 0;
+  background: #ffffff;
+  border-bottom: 1px solid #d9e1ea;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.diagram-zoom-controls {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.icon-button {
+  width: 38px;
+  min-width: 38px;
+  padding: 0;
+}
+
+.zoom-slider {
+  width: 180px;
+  max-width: 34vw;
+}
+
+.diagram-zoom-value {
+  min-width: 52px;
+  text-align: right;
+  color: #475467;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.diagram-viewport {
+  min-height: 520px;
+  overflow: auto;
+}
+
+.diagram {
+  display: block;
+  min-width: 820px;
+  background: #f8fafc;
+  border: 1px solid #d9e1ea;
+  border-width: 0;
+}
+
+.diagram text {
+  font-size: 12px;
+  font-weight: 700;
+  fill: #172033;
+  paint-order: stroke;
+  stroke: #f8fafc;
+  stroke-width: 4px;
+}
+
+.diagram .station-name {
+  font-size: 11px;
+  font-weight: 500;
+  fill: #475467;
+}
+
+.admin-board {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.admin-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-tabs button {
+  padding: 0 14px;
+}
+
+.admin-section {
+  display: grid;
+  grid-template-columns: minmax(320px, 430px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.admin-form,
+.data-list {
+  border: 1px solid #d9e1ea;
+  background: #ffffff;
+  padding: 14px;
+}
+
+.admin-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.admin-form button {
+  grid-column: 1 / -1;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+  color: #475467;
+  font-size: 13px;
+}
+
+.field span {
+  min-height: 16px;
+}
+
+.radio-field {
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+
+.radio-field legend {
+  min-height: 16px;
+  padding: 0;
+}
+
+.radio-option {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.check-row {
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #475467;
+  font-size: 13px;
+}
+
+.data-list h3 {
+  margin: 0 0 12px;
+  font-size: 16px;
+}
+
+.table-wrap {
+  overflow: auto;
+  max-height: 560px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+th,
+td {
+  border-bottom: 1px solid #e4eaf1;
+  padding: 8px 10px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+th {
+  position: sticky;
+  top: 0;
+  background: #f8fafc;
+  color: #475467;
+  z-index: 1;
+}
+
+.table-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.table-action {
+  min-height: 30px;
+  padding: 0 10px;
+  background: #ffffff;
+  color: #172033;
+  border: 1px solid #ccd5df;
+  white-space: nowrap;
+}
+
+.table-action.danger {
+  color: #b42318;
+  border-color: #f3b8b2;
+}
+
+.table-action.danger:hover {
+  background: #fff4f2;
+}
+
+@media (max-width: 860px) {
+  .shell {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    border-right: 0;
+    border-bottom: 1px solid #d9e1ea;
+  }
+
+  .topbar {
+    flex-direction: column;
+  }
+
+  .legend {
+    justify-content: flex-start;
+  }
+
+  .admin-section {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-form {
+    grid-template-columns: 1fr;
+  }
+}
