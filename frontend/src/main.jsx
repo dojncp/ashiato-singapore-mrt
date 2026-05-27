@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import {
   Database,
   LogIn,
+  LogOut,
   Map as MapIcon,
   Plus,
   RefreshCw,
@@ -65,6 +66,7 @@ const emptyPhysicalStation = {
   name_ta: '',
   lat: '',
   lng: '',
+  is_future: false,
   notes: '',
 };
 
@@ -103,7 +105,9 @@ function apiFetch(path, token, options = {}) {
   }).then(async (response) => {
     if (!response.ok) {
       const detail = await response.json().catch(() => ({}));
-      throw new Error(typeof detail.detail === 'string' ? detail.detail : JSON.stringify(detail.detail ?? `HTTP ${response.status}`));
+      const error = new Error(typeof detail.detail === 'string' ? detail.detail : JSON.stringify(detail.detail ?? `HTTP ${response.status}`));
+      error.status = response.status;
+      throw error;
     }
     if (response.status === 204) return null;
     return response.json();
@@ -119,6 +123,7 @@ function cleanPayload(payload) {
 function App() {
   const [token, setToken] = useState(localStorage.getItem('ashiato_token') ?? '');
   const [role, setRole] = useState(localStorage.getItem('ashiato_role') ?? '');
+  const [currentUser, setCurrentUser] = useState(null);
   const [username, setUsername] = useState('admin');
   const [password, setPassword] = useState('');
   const [view, setView] = useState('map');
@@ -133,6 +138,46 @@ function App() {
     return { total, ridden, rate: total ? Math.round((ridden / total) * 100) : 0 };
   }, [network]);
 
+  function persistSession(nextToken, nextRole) {
+    localStorage.setItem('ashiato_token', nextToken);
+    localStorage.setItem('ashiato_role', nextRole);
+    setToken(nextToken);
+    setRole(nextRole);
+  }
+
+  function clearSession(nextMessage = '已退出登录。') {
+    localStorage.removeItem('ashiato_token');
+    localStorage.removeItem('ashiato_role');
+    setToken('');
+    setRole('');
+    setCurrentUser(null);
+    setPassword('');
+    setView('map');
+    setMessage(nextMessage);
+  }
+
+  async function loadCurrentUser(activeToken = token) {
+    if (!activeToken) {
+      setCurrentUser(null);
+      return null;
+    }
+    try {
+      const user = await apiFetch('/users/me', activeToken);
+      setCurrentUser(user);
+      if (user.role && user.role !== role) {
+        localStorage.setItem('ashiato_role', user.role);
+        setRole(user.role);
+      }
+      return user;
+    } catch (error) {
+      if (error.status === 401) {
+        clearSession('登录已失效，请重新登录。');
+        return null;
+      }
+      throw error;
+    }
+  }
+
   async function login(event) {
     event.preventDefault();
     try {
@@ -140,11 +185,9 @@ function App() {
         method: 'POST',
         body: JSON.stringify({ username, password }),
       });
-      localStorage.setItem('ashiato_token', data.access_token);
-      localStorage.setItem('ashiato_role', data.role);
-      setToken(data.access_token);
-      setRole(data.role);
-      setMessage(`已登录：${data.role}`);
+      persistSession(data.access_token, data.role);
+      const user = await loadCurrentUser(data.access_token);
+      setMessage(user ? `已登录：${user.username} (${user.role})` : `已登录：${data.role}`);
       await loadAll(data.access_token);
     } catch (error) {
       setMessage(error.message);
@@ -153,6 +196,7 @@ function App() {
 
   async function loadAll(activeToken = token) {
     if (!activeToken) {
+      setCurrentUser(null);
       setMessage('请先登录。');
       return;
     }
@@ -167,6 +211,10 @@ function App() {
       if (pref.value_json) setStyle({ ...defaultStyle, ...pref.value_json });
       setMessage('已从后端刷新数据。');
     } catch (error) {
+      if (error.status === 401) {
+        clearSession('登录已失效，请重新登录。');
+        return;
+      }
       setMessage(error.message);
     }
   }
@@ -188,7 +236,9 @@ function App() {
   }
 
   useEffect(() => {
-    if (token) loadAll(token);
+    if (!token) return;
+    loadCurrentUser(token).catch((error) => setMessage(error.message));
+    loadAll(token);
   }, []);
 
   return (
@@ -202,15 +252,53 @@ function App() {
           </div>
         </div>
 
-        <form className="panel" onSubmit={login}>
+        {!currentUser && (
+          <form className="panel" onSubmit={login}>
+            <div className="panel-title">
+              <LogIn size={18} />
+              <span>登录</span>
+            </div>
+            <input value={username} onChange={(event) => setUsername(event.target.value)} placeholder="用户名" />
+            <input value={password} onChange={(event) => setPassword(event.target.value)} placeholder="密码" type="password" />
+            <button type="submit">登录</button>
+          </form>
+        )}
+
+        <section className="panel">
           <div className="panel-title">
             <LogIn size={18} />
-            <span>登录</span>
+            <span>当前登录状态</span>
           </div>
-          <input value={username} onChange={(event) => setUsername(event.target.value)} placeholder="用户名" />
-          <input value={password} onChange={(event) => setPassword(event.target.value)} placeholder="密码" type="password" />
-          <button type="submit">登录</button>
-        </form>
+          {currentUser ? (
+            <div className="auth-status" aria-live="polite">
+              <div className="auth-status-row">
+                <span>状态</span>
+                <strong>{currentUser.is_active ? '已登录' : '账号已停用'}</strong>
+              </div>
+              <div className="auth-status-row">
+                <span>用户名</span>
+                <strong>{currentUser.username}</strong>
+              </div>
+              <div className="auth-status-row">
+                <span>邮箱</span>
+                <strong>{currentUser.email}</strong>
+              </div>
+              <div className="auth-status-row">
+                <span>角色</span>
+                <strong>{currentUser.role}</strong>
+              </div>
+              <button type="button" className="secondary" onClick={() => clearSession()}>
+                <LogOut size={16} />
+                退出登录
+              </button>
+            </div>
+          ) : (
+            <div className="auth-status auth-status-empty" aria-live="polite">
+              <strong>未登录</strong>
+              <span>登录后这里会显示当前账号、角色与邮箱。</span>
+            </div>
+          )}
+        </section>
 
         <nav className="nav-panel">
           <button type="button" className={view === 'map' ? 'active' : ''} onClick={() => setView('map')}>
@@ -363,6 +451,13 @@ function AdminPanel({ token, network, physicalStations, onChange, onMessage }) {
   const lineStations = network.lineStations;
   const physicalStationById = useMemo(() => new Map(physicalStations.map((station) => [String(station.id), station])), [physicalStations]);
   const isEditing = (type) => editing.type === type && editing.id !== null;
+  const getNextLineStationSequence = (line_id, branch_code = 'main') => {
+    const sequences = lineStations
+      .filter((station) => String(station.line_id) === String(line_id) && (station.branch_code || 'main') === (branch_code || 'main'))
+      .map((station) => Number(station.sequence_index))
+      .filter(Number.isFinite);
+    return sequences.length ? Math.max(...sequences) + 1 : 1;
+  };
   const startEdit = (type, row, setter) => {
     setEditing({ type, id: row.id });
     setter({ ...row });
@@ -384,6 +479,20 @@ function AdminPanel({ token, network, physicalStations, onChange, onMessage }) {
       display_name_ta: station?.name_ta ?? '',
       diagram_x: station?.lng ?? '',
       diagram_y: station?.lat ?? '',
+    });
+  };
+  const updateLineStationLine = (line_id) => {
+    setLineStationForm({
+      ...lineStationForm,
+      line_id,
+      sequence_index: line_id ? getNextLineStationSequence(line_id, lineStationForm.branch_code) : 1,
+    });
+  };
+  const updateLineStationBranch = (branch_code) => {
+    setLineStationForm({
+      ...lineStationForm,
+      branch_code,
+      sequence_index: lineStationForm.line_id ? getNextLineStationSequence(lineStationForm.line_id, branch_code) : lineStationForm.sequence_index,
     });
   };
 
@@ -420,7 +529,7 @@ function AdminPanel({ token, network, physicalStations, onChange, onMessage }) {
       )}
 
       {tab === 'stations' && (
-        <AdminSection title="实体车站" rows={physicalStations} columns={['id', 'name_en', 'name_zh', 'name_ms', 'name_ta', 'lat', 'lng']} onEdit={(row) => startEdit('stations', row, setStationForm)}>
+        <AdminSection title="实体车站" rows={physicalStations} columns={['id', 'name_en', 'name_zh', 'name_ms', 'name_ta', 'lat', 'lng', 'is_future']} onEdit={(row) => startEdit('stations', row, setStationForm)}>
           <form className="admin-form" onSubmit={(event) => {
             event.preventDefault();
             submit('/physical-stations', numericPayload(stationForm, ['lat', 'lng']), () => setStationForm(emptyPhysicalStation), '实体车站', isEditing('stations') ? editing.id : null);
@@ -431,6 +540,10 @@ function AdminPanel({ token, network, physicalStations, onChange, onMessage }) {
             <TextInput label="淡米尔语名" value={stationForm.name_ta} onChange={(name_ta) => setStationForm({ ...stationForm, name_ta })} />
             <TextInput label="纬度" type="number" step="0.000001" value={stationForm.lat} onChange={(lat) => setStationForm({ ...stationForm, lat })} />
             <TextInput label="经度" type="number" step="0.000001" value={stationForm.lng} onChange={(lng) => setStationForm({ ...stationForm, lng })} />
+            <label className="check-row">
+              <input type="checkbox" checked={Boolean(stationForm.is_future)} onChange={(event) => setStationForm({ ...stationForm, is_future: event.target.checked })} />
+              待建车站（前端虚化显示）
+            </label>
             <TextInput label="备注" value={stationForm.notes} onChange={(notes) => setStationForm({ ...stationForm, notes })} />
             <button type="submit"><Plus size={16} />{isEditing('stations') ? '保存车站修改' : '新增实体车站'}</button>
             {isEditing('stations') && <button type="button" className="secondary" onClick={() => cancelEdit(() => setStationForm(emptyPhysicalStation))}>取消编辑</button>}
@@ -450,13 +563,13 @@ function AdminPanel({ token, network, physicalStations, onChange, onMessage }) {
               isEditing('lineStations') ? editing.id : null,
             );
           }}>
-            <SelectInput label="线路" value={lineStationForm.line_id} onChange={(line_id) => setLineStationForm({ ...lineStationForm, line_id })} required>
+            <SelectInput label="线路" value={lineStationForm.line_id} onChange={updateLineStationLine} required>
               <option value="">选择线路</option>
               {network.lines.map((line) => <option key={line.id} value={line.id}>{line.code} - {line.name_en}</option>)}
             </SelectInput>
             <SelectInput label="实体车站" value={lineStationForm.physical_station_id} onChange={updateLineStationPhysicalStation} required>
               <option value="">选择实体车站</option>
-              {physicalStations.map((station) => <option key={station.id} value={station.id}>{station.name_en}</option>)}
+              {physicalStations.map((station) => <option key={station.id} value={station.id}>{station.name_en}{station.is_future ? ' (待建)' : ''}</option>)}
             </SelectInput>
             <TextInput label="站点编号" value={lineStationForm.station_code} onChange={(station_code) => setLineStationForm({ ...lineStationForm, station_code })} required />
             <TextInput label="英文显示名" value={lineStationForm.display_name_en} onChange={(display_name_en) => setLineStationForm({ ...lineStationForm, display_name_en })} required />
@@ -466,7 +579,7 @@ function AdminPanel({ token, network, physicalStations, onChange, onMessage }) {
             <fieldset className="field radio-field">
               <legend>分支</legend>
               <label className="radio-option">
-                <input type="radio" name="line-station-branch" value="main" checked={(lineStationForm.branch_code || 'main') === 'main'} onChange={(event) => setLineStationForm({ ...lineStationForm, branch_code: event.target.value })} />
+                <input type="radio" name="line-station-branch" value="main" checked={(lineStationForm.branch_code || 'main') === 'main'} onChange={(event) => updateLineStationBranch(event.target.value)} />
                 main
               </label>
             </fieldset>
@@ -593,6 +706,7 @@ function SelectInput({ label, value, onChange, children, ...props }) {
 function NetworkDiagram({ network, styleConfig }) {
   const canvas = { width: 900, height: 620, padding: 78 };
   const [zoom, setZoom] = useState(1);
+  const [hoveredStationId, setHoveredStationId] = useState(null);
   const lineById = useMemo(() => new Map(network.lines.map((line) => [line.id, line])), [network.lines]);
   const plottedStations = useMemo(() => {
     const stationsWithCoordinates = network.lineStations
@@ -606,25 +720,76 @@ function NetworkDiagram({ network, styleConfig }) {
 
     const xs = stationsWithCoordinates.map((station) => station.rawX);
     const ys = stationsWithCoordinates.map((station) => station.rawY);
-    const minX = Math.min(...xs);
-    const maxX = Math.max(...xs);
-    const minY = Math.min(...ys);
-    const maxY = Math.max(...ys);
-    const hasHorizontalRange = maxX > minX;
-    const hasVerticalRange = maxY > minY;
-    const rangeX = hasHorizontalRange ? maxX - minX : 1;
-    const rangeY = hasVerticalRange ? maxY - minY : 1;
     const availableWidth = canvas.width - canvas.padding * 2;
     const availableHeight = canvas.height - canvas.padding * 2;
     const looksGeographic = xs.every((x) => x >= 95 && x <= 110) && ys.every((y) => y >= -2 && y <= 5);
+    const extentPaddingRatio = 0.06;
+    const latitudeCenter = ys.reduce((sum, value) => sum + value, 0) / ys.length;
+    const longitudeScale = looksGeographic ? Math.max(Math.cos((latitudeCenter * Math.PI) / 180), 0.000001) : 1;
+    const projectedStations = stationsWithCoordinates.map((station) => ({
+      ...station,
+      projectedX: station.rawX * longitudeScale,
+      projectedY: station.rawY,
+    }));
+    const projectedXs = projectedStations.map((station) => station.projectedX);
+    const projectedYs = projectedStations.map((station) => station.projectedY);
+    const minX = Math.min(...projectedXs);
+    const maxX = Math.max(...projectedXs);
+    const minY = Math.min(...projectedYs);
+    const maxY = Math.max(...projectedYs);
+    const baseRangeX = maxX - minX;
+    const baseRangeY = maxY - minY;
+    const paddingX = baseRangeX > 0 ? baseRangeX * extentPaddingRatio : 0.01;
+    const paddingY = baseRangeY > 0 ? baseRangeY * extentPaddingRatio : 0.01;
+    const paddedMinX = minX - paddingX;
+    const paddedMaxX = maxX + paddingX;
+    const paddedMinY = minY - paddingY;
+    const paddedMaxY = maxY + paddingY;
+    const paddedRangeX = paddedMaxX - paddedMinX || 1;
+    const paddedRangeY = paddedMaxY - paddedMinY || 1;
+    const scale = Math.min(availableWidth / paddedRangeX, availableHeight / paddedRangeY);
+    const contentWidth = paddedRangeX * scale;
+    const contentHeight = paddedRangeY * scale;
+    const offsetX = (canvas.width - contentWidth) / 2;
+    const offsetY = (canvas.height - contentHeight) / 2;
 
-    return new Map(stationsWithCoordinates.map((station) => {
-      const x = hasHorizontalRange ? canvas.padding + ((station.rawX - minX) / rangeX) * availableWidth : canvas.width / 2;
-      const yRatio = hasVerticalRange ? (station.rawY - minY) / rangeY : 0.5;
-      const y = hasVerticalRange ? canvas.padding + (looksGeographic ? 1 - yRatio : yRatio) * availableHeight : canvas.height / 2;
+    return new Map(projectedStations.map((station) => {
+      const x = offsetX + (station.projectedX - paddedMinX) * scale;
+      const y = looksGeographic
+        ? offsetY + (paddedMaxY - station.projectedY) * scale
+        : offsetY + (station.projectedY - paddedMinY) * scale;
       return [station.id, { ...station, x, y }];
     }));
   }, [network.lineStations]);
+  const hoveredStationInfo = useMemo(() => {
+    if (hoveredStationId === null) return null;
+    const station = network.lineStations.find((item) => item.id === hoveredStationId);
+    const plottedStation = plottedStations.get(hoveredStationId);
+    if (!station || !plottedStation) return null;
+
+    const infoLines = [String(station.station_code ?? ''), String(station.display_name_en ?? '')];
+    if (station.is_future) infoLines.push('待建车站');
+
+    const contentWidth = Math.max(...infoLines.map((line, index) => line.length * (index === 0 ? 8 : 6.6)), 0);
+    const boxWidth = Math.max(128, contentWidth + 24);
+    const boxHeight = 14 + infoLines.length * 16 + 12;
+    const preferLeft = plottedStation.x > canvas.width - boxWidth - 36;
+    const preferAbove = plottedStation.y > canvas.height - boxHeight - 24;
+    const offsetX = preferLeft ? -(boxWidth + 16) : 16;
+    const offsetY = preferAbove ? -(boxHeight + 12) : -10;
+    const boxX = Math.min(Math.max(plottedStation.x + offsetX, 10), canvas.width - boxWidth - 10);
+    const boxY = Math.min(Math.max(plottedStation.y + offsetY, 10), canvas.height - boxHeight - 10);
+
+    return {
+      station,
+      plottedStation,
+      infoLines,
+      boxX,
+      boxY,
+      boxWidth,
+      boxHeight,
+    };
+  }, [canvas.height, canvas.width, hoveredStationId, network.lineStations, plottedStations]);
   const zoomPercent = Math.round(zoom * 100);
   const setBoundedZoom = (nextZoom) => setZoom(Math.min(4, Math.max(0.75, nextZoom)));
 
@@ -689,24 +854,65 @@ function NetworkDiagram({ network, styleConfig }) {
               />
             );
           })}
-          {network.lineStations.map((station, index) => {
+          {network.lineStations.map((station) => {
             const plottedStation = plottedStations.get(station.id);
             if (!plottedStation) return null;
-            const labelOnLeft = plottedStation.x > canvas.width - 190;
-            const labelX = plottedStation.x + (labelOnLeft ? -12 : 12);
-            const labelY = plottedStation.y + (index % 2 === 0 ? -14 : 24);
+            const isFutureStation = Boolean(station.is_future);
+            const stationStroke = isFutureStation ? '#94a3b8' : styleConfig.station.color;
+            const stationFill = isFutureStation ? '#f8fafc' : '#fff';
+            const stationOpacity = isFutureStation ? 0.5 : 1;
             return (
-              <g key={station.id}>
-                <circle cx={plottedStation.x} cy={plottedStation.y} r={styleConfig.station.radius} fill="#fff" stroke={styleConfig.station.color} strokeWidth="2" />
-                <text x={labelX} y={labelY} textAnchor={labelOnLeft ? 'end' : 'start'}>
-                  {station.station_code}
-                </text>
-                <text className="station-name" x={labelX} y={labelY + 16} textAnchor={labelOnLeft ? 'end' : 'start'}>
-                  {station.display_name_en}
-                </text>
+              <g
+                key={station.id}
+                onMouseEnter={() => setHoveredStationId(station.id)}
+                onMouseLeave={() => setHoveredStationId((current) => (current === station.id ? null : current))}
+              >
+                <circle
+                  cx={plottedStation.x}
+                  cy={plottedStation.y}
+                  r={styleConfig.station.radius + 8}
+                  fill="transparent"
+                />
+                <circle
+                  cx={plottedStation.x}
+                  cy={plottedStation.y}
+                  r={styleConfig.station.radius}
+                  fill={stationFill}
+                  fillOpacity={stationOpacity}
+                  stroke={stationStroke}
+                  strokeOpacity={stationOpacity}
+                  strokeWidth="2"
+                />
+                <title>{`${station.station_code} - ${station.display_name_en}${station.is_future ? ' (待建车站)' : ''}`}</title>
               </g>
             );
           })}
+          {hoveredStationInfo && (
+            <g className="station-hover-card" pointerEvents="none">
+              <rect
+                x={hoveredStationInfo.boxX}
+                y={hoveredStationInfo.boxY}
+                width={hoveredStationInfo.boxWidth}
+                height={hoveredStationInfo.boxHeight}
+                rx="8"
+                fill="#ffffff"
+                fillOpacity="0.96"
+                stroke={hoveredStationInfo.station.is_future ? '#cbd5e1' : '#172033'}
+                strokeOpacity="0.22"
+              />
+              {hoveredStationInfo.infoLines.map((line, index) => (
+                <text
+                  key={`${hoveredStationInfo.station.id}-${line}`}
+                  className={index === 0 ? '' : 'station-name'}
+                  x={hoveredStationInfo.boxX + 12}
+                  y={hoveredStationInfo.boxY + 18 + index * 16}
+                  fill={index === 0 ? '#111827' : hoveredStationInfo.station.is_future ? '#94a3b8' : '#475569'}
+                >
+                  {line}
+                </text>
+              ))}
+            </g>
+          )}
         </svg>
       </div>
     </section>

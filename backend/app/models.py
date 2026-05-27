@@ -55,6 +55,7 @@ class PhysicalStation(Base):
     lat: Mapped[Optional[float]] = mapped_column(Numeric(10, 7))
     lng: Mapped[Optional[float]] = mapped_column(Numeric(10, 7))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_future: Mapped[bool] = mapped_column(Boolean, default=False)
     notes: Mapped[Optional[str]] = mapped_column(Text)
 
 

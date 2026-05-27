@@ -100,6 +100,35 @@ input[type="radio"] {
   font-weight: 700;
 }
 
+.auth-status {
+  display: grid;
+  gap: 10px;
+}
+
+.auth-status-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e4eaf1;
+}
+
+.auth-status-row span,
+.auth-status-empty span {
+  color: #667085;
+  font-size: 13px;
+}
+
+.auth-status-row strong,
+.auth-status-empty strong {
+  overflow-wrap: anywhere;
+}
+
+.auth-status-empty {
+  padding: 2px 0;
+}
+
 .style-editor {
   display: grid;
   gap: 10px;
@@ -428,6 +457,11 @@ th {
 
   .legend {
     justify-content: flex-start;
+  }
+
+  .auth-status-row {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .admin-section {

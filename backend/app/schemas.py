@@ -50,6 +50,7 @@ class PhysicalStationCreate(BaseModel):
     name_ta: Optional[str] = None
     lat: Optional[float] = None
     lng: Optional[float] = None
+    is_future: bool = False
     notes: Optional[str] = None
 
 
@@ -97,6 +98,7 @@ class LineStationRead(LineStationCreate):
 
     id: int
     is_active: bool
+    is_future: bool = False
 
 
 class SegmentCreate(BaseModel):

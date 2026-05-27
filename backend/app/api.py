@@ -4,6 +4,7 @@ from typing import Dict, List, Optional, Union
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -51,6 +52,48 @@ def update_model(instance, payload):
     for key, value in payload.model_dump().items():
         setattr(instance, key, value)
     return instance
+
+
+def commit_or_conflict(db: Session) -> None:
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=integrity_error_detail(exc)) from exc
+
+
+def integrity_error_detail(exc: IntegrityError) -> str:
+    message = str(getattr(exc, "orig", exc))
+    if "uq_line_stations_code" in message or "station_code" in message:
+        return "Station code already exists"
+    if "uq_line_stations_order" in message:
+        return "Sequence is already used on this line and branch"
+    return "Database constraint violation"
+
+
+def validate_line_station_payload(payload: LineStationCreate, db: Session, line_station_id: Optional[int] = None) -> None:
+    if not db.get(Line, payload.line_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Line not found")
+    if not db.get(PhysicalStation, payload.physical_station_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Physical station not found")
+
+    code_query = select(LineStation).where(LineStation.station_code == payload.station_code)
+    order_query = select(LineStation).where(
+        LineStation.line_id == payload.line_id,
+        LineStation.branch_code == payload.branch_code,
+        LineStation.sequence_index == payload.sequence_index,
+    )
+    if line_station_id is not None:
+        code_query = code_query.where(LineStation.id != line_station_id)
+        order_query = order_query.where(LineStation.id != line_station_id)
+
+    if db.scalar(code_query):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Station code {payload.station_code} already exists")
+    if db.scalar(order_query):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Sequence {payload.sequence_index} is already used on line {payload.line_id} branch {payload.branch_code}",
+        )
 
 
 @router.get("/health")
@@ -157,9 +200,10 @@ def update_line(line_id: int, payload: LineCreate, db: Session = Depends(get_db)
 
 @router.post("/line-stations", response_model=LineStationRead, dependencies=[Depends(require_admin)])
 def create_line_station(payload: LineStationCreate, db: Session = Depends(get_db)) -> LineStation:
+    validate_line_station_payload(payload, db)
     line_station = LineStation(**payload.model_dump())
     db.add(line_station)
-    db.commit()
+    commit_or_conflict(db)
     db.refresh(line_station)
     return line_station
 
@@ -177,8 +221,9 @@ def update_line_station(line_station_id: int, payload: LineStationCreate, db: Se
     line_station = db.get(LineStation, line_station_id)
     if not line_station:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Line station not found")
+    validate_line_station_payload(payload, db, line_station_id)
     update_model(line_station, payload)
-    db.commit()
+    commit_or_conflict(db)
     db.refresh(line_station)
     return line_station
 
@@ -317,9 +362,19 @@ def network(current_user: User = Depends(get_current_user), db: Session = Depend
             .where(RideRecord.user_id == current_user.id)
         )
     )
+    physical_station_future_map = {
+        station.id: station.is_future
+        for station in db.scalars(select(PhysicalStation))
+    }
     return {
         "lines": [LineRead.model_validate(line).model_dump() for line in db.scalars(select(Line).order_by(Line.display_order, Line.code))],
-        "lineStations": [LineStationRead.model_validate(station).model_dump() for station in db.scalars(select(LineStation).order_by(LineStation.line_id, LineStation.branch_code, LineStation.sequence_index))],
+        "lineStations": [
+            {
+                **LineStationRead.model_validate(station).model_dump(),
+                "is_future": bool(physical_station_future_map.get(station.physical_station_id, False)),
+            }
+            for station in db.scalars(select(LineStation).order_by(LineStation.line_id, LineStation.branch_code, LineStation.sequence_index))
+        ],
         "segments": [
             {**SegmentRead.model_validate(segment).model_dump(), "is_ridden": segment.id in ridden_segment_ids}
             for segment in db.scalars(select(Segment).order_by(Segment.line_id, Segment.display_order, Segment.id))

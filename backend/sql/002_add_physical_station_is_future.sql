@@ -1,0 +1,3 @@
+ALTER TABLE physical_stations
+ADD COLUMN is_future BOOLEAN NOT NULL DEFAULT FALSE
+AFTER is_active;
